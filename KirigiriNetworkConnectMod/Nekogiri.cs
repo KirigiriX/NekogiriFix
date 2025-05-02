@@ -13,12 +13,24 @@ using Steamworks.Data;
 
 namespace NekogiriMod
 {
-    [BepInPlugin("kirigiri.repo.nekogiri", "Nekogiri", "1.0.4.0")]
+    [BepInPlugin("kirigiri.repo.nekogiri", "Nekogiri", "1.1.0.1")]
     public class NekogiriMod : BaseUnityPlugin
     {
         private void Awake()
         {
             // Set up plugin logging
+            Logger.LogInfo(@"
+ ██ ▄█▀ ██▓ ██▀███   ██▓  ▄████  ██▓ ██▀███   ██▓
+ ██▄█▒ ▓██▒▓██ ▒ ██▒▓██▒ ██▒ ▀█▒▓██▒▓██ ▒ ██▒▓██▒
+▓███▄░ ▒██▒▓██ ░▄█ ▒▒██▒▒██░▄▄▄░▒██▒▓██ ░▄█ ▒▒██▒
+▓██ █▄ ░██░▒██▀▀█▄  ░██░░▓█  ██▓░██░▒██▀▀█▄  ░██░
+▒██▒ █▄░██░░██▓ ▒██▒░██░░▒▓███▀▒░██░░██▓ ▒██▒░██░
+▒ ▒▒ ▓▒░▓  ░ ▒▓ ░▒▓░░▓   ░▒   ▒ ░▓  ░ ▒▓ ░▒▓░░▓  
+░ ░▒ ▒░ ▒ ░  ░▒ ░ ▒░ ▒ ░  ░   ░  ▒ ░  ░▒ ░ ▒░ ▒ ░
+░ ░░ ░  ▒ ░  ░░   ░  ▒ ░░ ░   ░  ▒ ░  ░░   ░  ▒ ░
+░  ░    ░     ░      ░        ░  ░     ░      ░  
+                                                 
+");
             Logger.LogInfo("Nekogiri has loaded!");
 
             // Create a Harmony instance and apply the patch
@@ -34,62 +46,47 @@ namespace NekogiriMod
         {
             Logger.LogInfo("Custom Start method executed!");
 
-            // Load server settings from a configuration file
-            ServerSettings serverSettings = Resources.Load<ServerSettings>("PhotonServerSettings");
+            string configFilePath = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Kirigiri.ini");
+            string appIdRealtime = null;
+            string appIdVoice = null;
 
             try
             {
-                // Define the path to your INI file
-                string configFilePath = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Kirigiri.ini");
-
-                if (File.Exists(configFilePath))
+                if (!File.Exists(configFilePath))
                 {
-                    // Read all lines from the INI file
-                    var settings = File.ReadAllLines(configFilePath)
-                                       .Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith(";"))
-                                       .Select(line => line.Split('='))
-                                       .Where(parts => parts.Length == 2)
-                                       .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
-
-                    // Assign values from the INI file
-                    if (settings.ContainsKey("AppIdRealtime"))
-                        serverSettings.AppSettings.AppIdRealtime = settings["AppIdRealtime"];
-
-                    if (settings.ContainsKey("AppIdChat"))
-                        serverSettings.AppSettings.AppIdChat = settings["AppIdChat"];
-
-                    if (settings.ContainsKey("AppIdVoice"))
-                        serverSettings.AppSettings.AppIdVoice = settings["AppIdVoice"];
-
-                    if (settings.ContainsKey("AppIdFusion"))
-                        serverSettings.AppSettings.AppIdFusion = settings["AppIdFusion"];
-
-                    Logger.LogInfo($"Address read are {serverSettings.AppSettings.AppIdRealtime} & {serverSettings.AppSettings.AppIdVoice}");
-
-                    // Handle FixedRegion setting
-                    if (settings.ContainsKey("FixedRegion"))
-                    {
-                        PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = settings["FixedRegion"];
-                    }
-                    else
-                    {
-                        PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = "";
-                    }
-
-                    Logger.LogInfo($"Photon settings loaded from {configFilePath}");
+                    throw new FileNotFoundException($"Settings file not found at {configFilePath}.");
                 }
-                else
+
+                var settings = File.ReadAllLines(configFilePath)
+                                   .Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith(";"))
+                                   .Select(line => line.Split('='))
+                                   .Where(parts => parts.Length == 2)
+                                   .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
+
+                if (!settings.TryGetValue("AppIdRealtime", out appIdRealtime) || string.IsNullOrWhiteSpace(appIdRealtime))
                 {
-                    PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = "";
-                    Logger.LogWarning($"Settings file not found at {configFilePath}. Using default values.");
+                    throw new Exception("AppIdRealtime not found or is empty in the INI file.");
                 }
+                if (!settings.TryGetValue("AppIdVoice", out appIdVoice) || string.IsNullOrWhiteSpace(appIdVoice))
+                {
+                    throw new Exception("AppIdVoice not found or is empty in the INI file.");
+                }
+
+                Debug.Log($"[Photon] AppIdRealtime from INI: {appIdRealtime}");
+                Debug.Log($"[Photon] AppIdVoice from INI: {appIdVoice}");
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = "";
-                Logger.LogError($"Error loading Photon settings: {ex.Message}. Using default values.");
+                Logger.LogError($"Critical error: {ex.Message}");
+                throw;
             }
+
+            SemiLogger.LogAxel("PhotonSetAppId", null, null);
+            PhotonNetwork.PhotonServerSettings.AppSettings.AppIdRealtime = appIdRealtime;
+            PhotonNetwork.PhotonServerSettings.AppSettings.AppIdVoice = appIdVoice;
         }
+
+
 
         // Custom method to initialize Steam with a dynamic App ID from the INI file
         private void CustomSteamAppID()
@@ -248,26 +245,30 @@ namespace NekogiriMod
 
                     for (int i = 0; i < lines.Count; i++)
                     {
-                        // Look for the line containing "WelcomeRead"
+                        // Look for the line containing "FirstLaunch"
                         if (lines[i].StartsWith("FirstLaunch"))
                         {
-                            // If WelcomeRead is 0, show the message and update to 1
+                            // If FirstLaunch is 1, show the message and update to 0
                             if (lines[i].Contains("FirstLaunch=1"))
                             {
-                                // Show the welcome message
-                                MenuManager.instance.PagePopUp("Made By Kirigiri", UnityEngine.Color.magenta, "<size=20>This mod has been made by Kirigiri.\nMake sure to create an account on <color=#808080>https://www.photonengine.com/</color> and to fill the values inside the <color=#34ebde>Kirigiri.ini</color> file !\nThis message will appear only once, Have fun !", "OK");
-                                Application.OpenURL("https://www.photonengine.com/");
+                                // Show the welcome message with the correct PagePopUp signature
+                                MenuManager.instance.PagePopUp(
+                                    "Nekogiri",
+                                    UnityEngine.Color.magenta,
+                                    "<size=20>This mod has been made by Kirigiri.\nMake sure to create an account on <color=#808080>https://www.photonengine.com/</color> and to fill the values inside the <color=#cc00ff>Kirigiri.ini</color> file !\nThis message will appear only once, Have fun !",
+                                    "OK",
+                                    true // richText enabled
+                                );
 
                                 // Update FirstLaunch to 0
                                 lines[i] = "FirstLaunch=0";
                                 welcomeReadUpdated = true;
-                                Logger.LogInfo("Welcome message displayed and FirstLaunch updated.");
                             }
                             break;
                         }
                     }
 
-                    // If the WelcomeRead was updated, write back the modified lines
+                    // If the FirstLaunch value was updated, write back the modified lines
                     if (welcomeReadUpdated)
                     {
                         File.WriteAllLines(configFilePath, lines);
@@ -282,8 +283,9 @@ namespace NekogiriMod
 
 
 
+
         // Patch the original Start method with the custom one
-        [HarmonyPatch(typeof(NetworkConnect), "Start")]
+        [HarmonyPatch(typeof(DataDirector), "PhotonSetAppId")]
         public class NetworkConnectPatch
         {
             // Prefix is called before the original method is called
@@ -293,7 +295,7 @@ namespace NekogiriMod
             public static bool Prefix()
             {
                 // Instead of the original Start method, call CustomStart
-                Debug.Log("Patching NetworkConnect.Start method.");
+                Debug.Log("Patching DataDirector.PhotonSetAppId method.");
                 new NekogiriMod().CustomStart();
 
                 // Return false to skip the original Start method
@@ -301,7 +303,6 @@ namespace NekogiriMod
             }
         }
 
-        // Patch the original Start method with the custom one
         [HarmonyPatch(typeof(MenuPageMain), "Start")]
         public class MenuPageMainPatch
         {
@@ -312,7 +313,6 @@ namespace NekogiriMod
             public static bool Prefix()
             {
                 // Instead of the original Start method, call WelcomeMessage
-                Debug.Log("Patching MenuPageMain.Start method.");
                 new NekogiriMod().WelcomeMessage();
 
                 // Return false to skip the original Start method
@@ -369,16 +369,5 @@ namespace NekogiriMod
         }
 
         internal AuthTicket steamAuthTicket;
-
-        // The PhotonAppSettings class should be outside CustomStart, at the class level
-        [Serializable]
-        public class PhotonAppSettings
-        {
-            public string AppIdRealtime = "";
-            public string AppIdChat = "";
-            public string AppIdVoice = "";
-            public string AppIdFusion = "";
-            public string FixedRegion = "";
-        }
     }
 }
