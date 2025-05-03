@@ -13,7 +13,7 @@ using Steamworks.Data;
 
 namespace NekogiriMod
 {
-    [BepInPlugin("kirigiri.repo.nekogiri", "Nekogiri", "1.1.0.1")]
+    [BepInPlugin("kirigiri.repo.nekogiri", "Nekogiri", "1.1.0.2")]
     public class NekogiriMod : BaseUnityPlugin
     {
         private void Awake()
@@ -47,44 +47,62 @@ namespace NekogiriMod
             Logger.LogInfo("Custom Start method executed!");
 
             string configFilePath = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Kirigiri.ini");
-            string appIdRealtime = null;
-            string appIdVoice = null;
 
-            try
+            // Default App IDs
+            string appIdRealtime = "99515094-45b7-4c98-ab70-a448c548c83d";
+            string appIdVoice = "dfc40a01-c3a4-4395-9707-b71118816d2b";
+            bool useDefaultRepoServers = false;
+
+            if (File.Exists(configFilePath))
             {
-                if (!File.Exists(configFilePath))
+                try
                 {
-                    throw new FileNotFoundException($"Settings file not found at {configFilePath}.");
+                    var settings = File.ReadAllLines(configFilePath)
+                                       .Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith(";"))
+                                       .Select(line => line.Split('='))
+                                       .Where(parts => parts.Length == 2)
+                                       .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
+
+                    // Check for UseDefaultRepoServers flag
+                    if (settings.TryGetValue("UseDefaultRepoServers", out string useDefaultValue) && useDefaultValue == "1")
+                    {
+                        useDefaultRepoServers = true;
+                    }
+
+                    // If not using defaults, try to get AppIdRealtime and AppIdVoice from INI file
+                    if (!useDefaultRepoServers)
+                    {
+                        if (settings.TryGetValue("AppIdRealtime", out string iniAppIdRealtime) && !string.IsNullOrWhiteSpace(iniAppIdRealtime))
+                        {
+                            appIdRealtime = iniAppIdRealtime;
+                            Debug.Log($"[Photon] AppIdRealtime from INI: {appIdRealtime}");
+                        }
+
+                        if (settings.TryGetValue("AppIdVoice", out string iniAppIdVoice) && !string.IsNullOrWhiteSpace(iniAppIdVoice))
+                        {
+                            appIdVoice = iniAppIdVoice;
+                            Debug.Log($"[Photon] AppIdVoice from INI: {appIdVoice}");
+                        }
+                    }
                 }
-
-                var settings = File.ReadAllLines(configFilePath)
-                                   .Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith(";"))
-                                   .Select(line => line.Split('='))
-                                   .Where(parts => parts.Length == 2)
-                                   .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
-
-                if (!settings.TryGetValue("AppIdRealtime", out appIdRealtime) || string.IsNullOrWhiteSpace(appIdRealtime))
+                catch (Exception ex)
                 {
-                    throw new Exception("AppIdRealtime not found or is empty in the INI file.");
+                    Logger.LogError($"Error reading INI file, using default App IDs. Details: {ex.Message}");
                 }
-                if (!settings.TryGetValue("AppIdVoice", out appIdVoice) || string.IsNullOrWhiteSpace(appIdVoice))
-                {
-                    throw new Exception("AppIdVoice not found or is empty in the INI file.");
-                }
-
-                Debug.Log($"[Photon] AppIdRealtime from INI: {appIdRealtime}");
-                Debug.Log($"[Photon] AppIdVoice from INI: {appIdVoice}");
             }
-            catch (Exception ex)
+            else
             {
-                Logger.LogError($"Critical error: {ex.Message}");
-                throw;
+                Logger.LogWarning($"INI file not found at {configFilePath}, using default App IDs.");
+                useDefaultRepoServers = true; // Use default if the INI file is missing
             }
 
+            // Apply the final AppId settings based on the condition
             SemiLogger.LogAxel("PhotonSetAppId", null, null);
             PhotonNetwork.PhotonServerSettings.AppSettings.AppIdRealtime = appIdRealtime;
             PhotonNetwork.PhotonServerSettings.AppSettings.AppIdVoice = appIdVoice;
         }
+
+
 
 
 
@@ -93,7 +111,9 @@ namespace NekogiriMod
         {
             Logger.LogInfo("Custom Steam AppID method executed!");
             string configFilePath = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Kirigiri.ini");
-            uint appId = 480U; // Default value for AppId if not found
+
+            uint appId = 3241660U; // Default value for AppId if not found
+            bool useDefaultRepoServers = false;
 
             try
             {
@@ -106,31 +126,43 @@ namespace NekogiriMod
                                        .Where(parts => parts.Length == 2)
                                        .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
 
-                    if (settings.ContainsKey("SteamAppId"))
+                    // Check for UseDefaultRepoServers flag
+                    if (settings.TryGetValue("UseDefaultRepoServers", out string useDefaultValue) && useDefaultValue == "1")
                     {
-                        // Try to parse the App ID from the file, if available
-                        if (uint.TryParse(settings["SteamAppId"], out uint parsedAppId))
+                        useDefaultRepoServers = true;
+                        Logger.LogInfo("Using default R.E.P.O. servers !.");
+                    }
+
+                    // If not using defaults, try to get SteamAppId from the INI file
+                    if (!useDefaultRepoServers)
+                    {
+                        if (settings.ContainsKey("SteamAppId"))
                         {
-                            appId = parsedAppId;
+                            // Try to parse the App ID from the file, if available
+                            if (uint.TryParse(settings["SteamAppId"], out uint parsedAppId))
+                            {
+                                appId = parsedAppId;
+                            }
+                            else
+                            {
+                                Logger.LogWarning("Invalid SteamAppId in the INI file, defaulting to 3241660.");
+                            }
                         }
                         else
                         {
-                            Logger.LogWarning("Invalid SteamAppId in the INI file, defaulting to 480.");
+                            Logger.LogWarning("SteamAppId not found in the INI file, defaulting to 3241660.");
                         }
-                    }
-                    else
-                    {
-                        Logger.LogWarning("SteamAppId not found in the INI file, defaulting to 480.");
                     }
                 }
                 else
                 {
-                    Logger.LogWarning($"Settings file not found at {configFilePath}. Using default App ID 480.");
+                    Logger.LogWarning($"Settings file not found at {configFilePath}. Using default App ID 3241660.");
+                    useDefaultRepoServers = true; // Use default if the INI file is missing
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogError($"Error reading SteamAppId from INI: {ex.Message}. Defaulting to App ID 480.");
+                Logger.LogError($"Error reading SteamAppId from INI: {ex.Message}. Defaulting to App ID 3241660.");
             }
 
             // Initialize Steam client with the dynamic AppId
@@ -138,11 +170,13 @@ namespace NekogiriMod
             Logger.LogInfo($"Steam client initialized with AppId {appId}");
         }
 
+
         public void CustomAuth()
         {
             Logger.LogInfo("Custom Auth method executed!");
             string configFilePath = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Kirigiri.ini");
-            string authSetting = "None"; // Default value if not found or invalid
+            string authSetting = "Steam"; // Default value for Auth setting if not found or invalid
+            bool useDefaultRepoServers = false;
 
             try
             {
@@ -155,30 +189,41 @@ namespace NekogiriMod
                                        .Where(parts => parts.Length == 2)
                                        .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
 
-                    if (settings.ContainsKey("Auth"))
+                    // Check for UseDefaultRepoServers flag
+                    if (settings.TryGetValue("UseDefaultRepoServers", out string useDefaultValue) && useDefaultValue == "1")
                     {
-                        authSetting = settings["Auth"];
+                        useDefaultRepoServers = true;
                     }
-                    else
+
+                    // If not using defaults, try to get Auth setting from the INI file
+                    if (!useDefaultRepoServers)
                     {
-                        Logger.LogWarning("Auth setting not found in the INI file, defaulting to 'None'.");
+                        if (settings.ContainsKey("Auth"))
+                        {
+                            authSetting = settings["Auth"];
+                        }
+                        else
+                        {
+                            Logger.LogWarning("Auth setting not found in the INI file, defaulting to 'Steam'.");
+                        }
                     }
                 }
                 else
                 {
-                    Logger.LogWarning($"Settings file not found at {configFilePath}. Using default Auth value 'None'.");
+                    Logger.LogWarning($"Settings file not found at {configFilePath}. Using default Auth value 'Steam'.");
+                    useDefaultRepoServers = true; // Use default if the INI file is missing
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogError($"Error reading Auth setting from INI: {ex.Message}. Defaulting to 'None'.");
+                Logger.LogError($"Error reading Auth setting from INI: {ex.Message}. Defaulting to 'Steam'.");
             }
 
             // Map the string to the corresponding CustomAuthenticationType
             PhotonNetwork.AuthValues = new AuthenticationValues();
             PhotonNetwork.AuthValues.UserId = SteamClient.SteamId.ToString();
 
-            CustomAuthenticationType authType = CustomAuthenticationType.None; // Default to None
+            CustomAuthenticationType authType = CustomAuthenticationType.Steam; // Default to Steam
 
             // Check the Auth setting and set the corresponding authentication type
             switch (authSetting.ToLower())
@@ -230,6 +275,7 @@ namespace NekogiriMod
 
             Logger.LogInfo($"Patched Auth to {PhotonNetwork.AuthValues.AuthType}!");
         }
+
 
         private void WelcomeMessage()
         {
