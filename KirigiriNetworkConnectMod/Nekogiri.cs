@@ -38,7 +38,7 @@ namespace NekogiriMod
             harmony.PatchAll();  // Automatically patch all methods that have the PatchAttribute
 
             // Optionally log that the patch has been applied
-            Logger.LogInfo("Made with <3 By Kirigiri \nhttps://discord.gg/zn2a2A65My");
+            Logger.LogInfo("Made with <3 By Kirigiri \nhttps://discord.gg/P5cDx4Fyfc");
         }
 
         // The custom method to replace the original Start method
